@@ -14,13 +14,13 @@ model="openai/gpt-oss-120b"
 role="user"
 
 #structure it
-from pydentic import BaseModel
+from pydantic import BaseModel
 class Ticket(BaseModel):
     name:str
     email:str
     issue:str
 
-schema=Ticket.model_json__schema()
+schema=Ticket.model_json_schema()
 response_format={
     "type":"json_object"
 }
@@ -45,5 +45,5 @@ message={
 }
 messages=[message_system,message]
 
-response=client.chat.completions.create(model=model,messages=messages,response_format=response_fromat)
+response=client.chat.completions.create(model=model,messages=messages,response_format=response_format)
 print(response.choices[0].message.content)
