@@ -46,4 +46,14 @@ message={
 messages=[message_system,message]
 
 response=client.chat.completions.create(model=model,messages=messages,response_format=response_format)
-print(response.choices[0].message.content)
+#print(response.choices[0].message.content)
+
+#json format
+import json
+raw_json=response.choices[0].message.content
+data_file=json.loads(raw_json)
+ticket=Ticket(**data_file)
+
+print(ticket.name)
+print(ticket.email)
+print(ticket.issue)
