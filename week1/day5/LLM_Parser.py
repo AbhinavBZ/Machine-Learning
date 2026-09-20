@@ -23,7 +23,7 @@ Write clean, maintainable, and testable code using modern frameworks and languag
 Participate in team code reviews, debug applications, and resolve system issues to maintain reliability.
 Learn and apply Accenture's enterprise standards related to software engineering, security, and compliance.
 Basic Qualifications:Currently pursuing an undergraduate or master's degree in Computer Science, Software Engineering, Information Technology, or a related discipline.
-Understanding of fundamental concepts like object-oriented programming, data structures, and algorithms.Strong analytical thinking, problem-solving skills, and a proactive willingness to learn.
+ Understanding of fundamental concepts like object-oriented programming, data structures, and algorithms.Strong analytical thinking, problem-solving skills, and a proactive willingness to learn.
 """
 
 from pydantic import BaseModel
