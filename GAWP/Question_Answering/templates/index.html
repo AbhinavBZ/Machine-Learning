@@ -1,0 +1,81 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AI Question Answering System</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+    <div class="container">
+
+        <header>
+
+            <h1>AI Question Answering</h1>
+            <p>Powered by RoBERTa Transformer Model</p>
+        </header>
+
+        <main>
+
+            <form method="POST">
+
+                <div class="field">
+                    <label for="context">Enter Context / Information</label>
+
+                    <textarea
+                        name="context"
+                        id="context"
+                        rows="7"
+                        placeholder="Enter the information from which the answer should be extracted..."
+                        required>{{ context or '' }}</textarea>
+                </div>
+
+                <div class="field">
+                    <label for="question">Ask Your Question</label>
+
+                    <input
+                        type="text"
+                        name="question"
+                        id="question"
+                        placeholder="Example: Who developed Python?"
+                        value="{{ question or '' }}"
+                        required>
+                </div>
+
+                <button type="submit">
+                    Find Answer →
+                </button>
+
+            </form>
+
+            {% if answer %}
+            <section class="result-section">
+
+                <h2>Answer</h2>
+
+                <div class="answer-box">
+                    {{ answer }}
+                </div>
+
+                {% if confidence is not none %}
+                <div class="confidence">
+                    <span>Model Confidence Score</span>
+                    <strong>{{ confidence }}%</strong>
+                </div>
+                {% endif %}
+
+            </section>
+            {% endif %}
+
+        </main>
+    </div>
+
+</body>
+</html>
