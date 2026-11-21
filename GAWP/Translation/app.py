@@ -1,45 +1,38 @@
 
-from flask import Flask, render_template, request
 import torch
-from transformers import MarianMTModel, MarianTokenizer
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
-app = Flask(__name__)
-
-# Translation models
+# Available translation models
 MODELS = {
     "en-hi": "Helsinki-NLP/opus-mt-en-hi",
     "hi-en": "Helsinki-NLP/opus-mt-hi-en"
 }
 
-# Cache loaded models
-model_cache = {}
-
 # Select CPU or GPU
-device = torch.device(
-    "cuda" if torch.cuda.is_available() else "cpu"
-)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Store loaded models to avoid loading them repeatedly
+model_cache = {}
 
 
 def load_model(direction):
-
-    if direction not in MODELS:
-        raise ValueError("Unsupported translation direction")
 
     if direction not in model_cache:
 
         model_name = MODELS[direction]
 
-        print(f"\nLoading model: {model_name}")
+        print("\nLoading translation model...")
+        
+        tokenizer = AutoTokenizer.from_pretrained(model_name,local_files_only=True)
 
-        tokenizer = MarianTokenizer.from_pretrained(model_name)
-        model = MarianMTModel.from_pretrained(model_name)
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name, local_files_only=True)
 
         model.to(device)
         model.eval()
 
         model_cache[direction] = (tokenizer, model)
 
-        print(f"Model loaded successfully on {device}")
+        print("Model loaded successfully!")
 
     return model_cache[direction]
 
@@ -48,85 +41,82 @@ def translate(text, direction):
 
     tokenizer, model = load_model(direction)
 
-    # Convert input text into tokens
+    # Convert text into model input tokens
     inputs = tokenizer(
         text,
         return_tensors="pt",
-        padding=True,
         truncation=True,
         max_length=256
     )
 
-    # Move tokens to selected device
+    # Move input tensors to CPU/GPU
     inputs = {
         key: value.to(device)
         for key, value in inputs.items()
     }
 
-    # Generate translated tokens
-    with torch.no_grad():
+    # Generate translation
+    with torch.inference_mode():
 
-        translated_tokens = model.generate(
+        outputs = model.generate(
             **inputs,
             max_length=256,
             num_beams=4,
             early_stopping=True
         )
 
-    # Convert tokens into readable text
+    # Convert generated tokens into readable text
     result = tokenizer.decode(
-        translated_tokens[0],
+        outputs[0],
         skip_special_tokens=True
     )
 
     return result
 
 
-@app.route("/", methods=["GET", "POST"])
-def home():
+def main():
 
-    result = ""
-    original = ""
+    print("=" * 45)
+    print("       AI TEXT TRANSLATION SYSTEM")
+    print("=" * 45)
 
-    if request.method == "POST":
+    print("1. English to Hindi")
+    print("2. Hindi to English")
 
-        original = request.form.get("text", "").strip()
-        source = request.form.get("source", "en")
-        target = request.form.get("target", "hi")
+    choice = input("\nSelect translation direction: ").strip()
 
-        direction = f"{source}-{target}"
+    if choice == "1":
+        direction = "en-hi"
+    elif choice == "2":
+        direction = "hi-en"
+    else:
+        print("Invalid selection.")
+        return
 
-        if not original:
-            result = "Please enter some text."
+    print("\nEnter 'exit' to close the program.")
 
-        elif source == target:
-            result = "Please select different source and target languages."
+    while True:
 
-        elif direction not in MODELS:
-            result = "Selected translation direction is not supported."
+        text = input("\nEnter text to translate: ").strip()
 
-        else:
-            try:
-                result = translate(original, direction)
+        if text.lower() == "exit":
+            print("Translation system closed.")
+            break
 
-            except Exception as error:
-                print("Translation error:", error)
-                result = "Translation failed. Please try again."
+        if not text:
+            print("Please enter some text.")
+            continue
 
-    return render_template(
-        "index.html",
-        result=result,
-        original=original
-    )
+        try:
+            result = translate(text, direction)
+
+            print("\nTranslated Output:")
+            print(result)
+
+        except Exception as error:
+            print("\nTranslation error:", error)
 
 
 if __name__ == "__main__":
-
-    print("Starting AI Translation Application...")
     print("Device:", device)
-
-    app.run(
-        host="127.0.0.1",
-        port=5000,
-        debug=False
-    )
+    main()

@@ -1,170 +1,107 @@
 
-from flask import Flask, render_template, request
-from transformers import (
-    AutoTokenizer,
-    AutoModelForQuestionAnswering
-)
 import torch
-
-app = Flask(__name__)
+from transformers import AutoTokenizer, AutoModelForQuestionAnswering
 
 MODEL_NAME = "deepset/roberta-base-squad2"
 
-# Select CPU or GPU
-device = torch.device(
-    "cuda" if torch.cuda.is_available() else "cpu"
-)
-
-print("Loading Question Answering model...")
-
-# Load tokenizer and pretrained model
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForQuestionAnswering.from_pretrained(
-    MODEL_NAME
-)
-
-model.to(device)
-model.eval()
-
-print("Question Answering model loaded successfully!")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def get_answer(context, question):
+def load_model():
+    print("\nLoading Question Answering model...")
 
-    # Tokenize question and context together
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    model = AutoModelForQuestionAnswering.from_pretrained(MODEL_NAME)
+
+    model.to(device)
+    model.eval()
+
+    print("Model loaded successfully!")
+
+    return tokenizer, model
+
+
+def get_answer(context, question, tokenizer, model):
+
     inputs = tokenizer(
         question,
         context,
         return_tensors="pt",
-        return_offsets_mapping=True,
         truncation="only_second",
-        max_length=512
+        max_length=512,
+        return_offsets_mapping=True
     )
 
-    # Identify tokens belonging to the context
-    sequence_ids = inputs.sequence_ids(0)
+    offsets = inputs.pop("offset_mapping")[0]
+    inputs = {key: value.to(device) for key, value in inputs.items()}
 
-    # Keep offset mapping separately
-    offsets = inputs.pop("offset_mapping")[0].tolist()
-
-    # Move model inputs to CPU/GPU
-    inputs = {
-        key: value.to(device)
-        for key, value in inputs.items()
-    }
-
-    # Run model inference
-    with torch.no_grad():
+    with torch.inference_mode():
         outputs = model(**inputs)
 
     start_logits = outputs.start_logits[0]
     end_logits = outputs.end_logits[0]
 
-    # Find context token positions
-    context_positions = [
-        i for i, seq_id in enumerate(sequence_ids)
-        if seq_id == 1
-    ]
+    # Find the most likely answer span
+    start_index = torch.argmax(start_logits).item()
+    end_index = torch.argmax(end_logits).item()
 
-    if not context_positions:
-        return "No answer found in the provided context.", 0.0
+    # Check whether the predicted span is valid
+    if end_index < start_index or end_index - start_index > 30:
+        return "No suitable answer found."
 
-    # Find the best valid answer span
-    best_score = float("-inf")
-    best_start = None
-    best_end = None
+    start_char = offsets[start_index][0].item()
+    end_char = offsets[end_index][1].item()
 
-    for start in context_positions:
-        for end in context_positions:
+    answer = context[start_char:end_char]
 
-            if end < start:
-                continue
+    if not answer.strip():
+        return "No suitable answer found."
 
-            # Limit answer length
-            if end - start + 1 > 30:
-                continue
-
-            score = (
-                start_logits[start].item()
-                + end_logits[end].item()
-            )
-
-            if score > best_score:
-                best_score = score
-                best_start = start
-                best_end = end
-
-    # Check whether the model predicts no answer
-    null_score = (
-        start_logits[0].item()
-        + end_logits[0].item()
-    )
-
-    if null_score > best_score:
-        return "No suitable answer found in the context.", 0.0
-
-    # Extract answer using character offsets
-    char_start = offsets[best_start][0]
-    char_end = offsets[best_end][1]
-
-    answer = context[char_start:char_end].strip()
-
-    # Approximate confidence from start/end probabilities
-    start_probs = torch.softmax(start_logits, dim=0)
-    end_probs = torch.softmax(end_logits, dim=0)
-
-    confidence = (
-        start_probs[best_start].item()
-        * end_probs[best_end].item()
-        * 100
-    )
-
-    return answer, round(confidence, 2)
+    return answer
 
 
-@app.route("/", methods=["GET", "POST"])
-def home():
+def main():
 
-    answer = ""
-    confidence = None
-    context = ""
-    question = ""
+    print("=" * 50)
+    print("       AI QUESTION ANSWERING SYSTEM")
+    print("=" * 50)
 
-    if request.method == "POST":
+    tokenizer, model = load_model()
 
-        context = request.form.get("context", "").strip()
-        question = request.form.get("question", "").strip()
+    print("\nEnter 'exit' to close the program.")
 
-        if not context or not question:
-            answer = "Please provide both context and question."
+    while True:
 
-        else:
-            try:
-                answer, confidence = get_answer(
-                    context,
-                    question
-                )
+        context = input("\nEnter the context passage: ").strip()
 
-            except Exception as error:
-                print("Error:", error)
-                answer = "Unable to process the question."
+        if context.lower() == "exit":
+            print("Question Answering System Closed.")
+            break
 
-    return render_template(
-        "index.html",
-        answer=answer,
-        confidence=confidence,
-        context=context,
-        question=question
-    )
+        if not context:
+            print("Please enter a valid passage.")
+            continue
+
+        question = input("\nEnter your question: ").strip()
+
+        if question.lower() == "exit":
+            print("Question Answering System Closed.")
+            break
+
+        if not question:
+            print("Please enter a valid question.")
+            continue
+
+        try:
+            answer = get_answer(context, question, tokenizer, model)
+
+            print("\nAnswer:")
+            print(answer)
+
+        except Exception as error:
+            print("\nError:", error)
 
 
 if __name__ == "__main__":
-
-    print("Starting Question Answering Application...")
     print("Device:", device)
-
-    app.run(
-        host="127.0.0.1",
-        port=5001,
-        debug=False
-    )
+    main()
